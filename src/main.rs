@@ -7,20 +7,12 @@ use rust_vpn::{
 use std::thread;
 use std::time::Duration;
 
-fn run_server(server_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<()> {
-    match VpnService::new(server_addr, encryption_key, Some(config)) {
-        Ok(vpn) => {
-            match vpn.start() {
-                Ok(_) => println!("VPN server started successfully"),
-                Err(e) => eprintln!("Failed to start VPN server: {:?}", e),
-            }
-            Ok(())
-        }
-        Err(e) => {
-            eprintln!("Failed to create VPN service: {:?}", e);
-            Err(e)
-        }
-    }
+fn run_server(bind_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<VpnService> {
+    let mut vpn = VpnService::new(bind_addr, encryption_key, Some(config))?;
+
+    vpn.start()?;
+
+    Ok(vpn)
 }
 
 fn run_client(server_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<()> {
@@ -77,16 +69,7 @@ async fn main() -> Result<()> {
         reconnect_attempts: 3,
     };
 
-    let server_handle = thread::spawn({
-        let server_addr = server_addr.to_string();
-        let server_config = config.clone();
-        move || {
-            println!("Server thread started");
-            if let Err(e) = run_server(&server_addr, encryption_key, server_config) {
-                eprintln!("Server thread error: {:?}", e);
-            }
-        }
-    });
+    let mut vpn = run_server(&server_addr.to_string(), encryption_key, config.clone())?;
 
     println!("Waiting for server to start...");
     thread::sleep(Duration::from_secs(2));
@@ -100,6 +83,8 @@ async fn main() -> Result<()> {
 
     // Wait a bit before shutting down
     thread::sleep(Duration::from_secs(2));
+
+    vpn.shutdown()?;
 
     Ok(())
 }

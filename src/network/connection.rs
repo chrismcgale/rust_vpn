@@ -24,7 +24,7 @@ pub struct ConnectionManager {
 #[derive(Clone)]
 pub struct ConnectionInfo {
     last_seen: Instant,
-    connected_since: Instant,
+    //connected_since: Instant,
     bytes_sent: u64,
     bytes_received: u64,
     packets_sent: u64,
@@ -35,7 +35,7 @@ impl ConnectionInfo {
     fn new() -> Self {
         Self {
             last_seen: Instant::now(),
-            connected_since: Instant::now(),
+            //connected_since: Instant::now(),
             bytes_sent: 0,
             bytes_received: 0,
             packets_sent: 0,

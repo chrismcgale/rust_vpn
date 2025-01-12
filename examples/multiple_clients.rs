@@ -23,6 +23,7 @@ fn run_server(bind_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> R
 
     Ok(vpn)
 }
+
 fn run_client(
     server_addr: &str,
     encryption_key: [u8; 32],

@@ -100,17 +100,7 @@ impl VpnWorker {
         match packet.packet_type {
             PacketType::Data => self.handle_data_packet(client_id, packet),
             PacketType::Keepalive => self.handle_keepalive(client_id),
-            PacketType::Control => {
-                match packet
-                    .control_type
-                    .ok_or(VpnError::Protocol("Missing control type".into()))?
-                {
-                    ControlType::ConfigRequest => self.send_config(client_id),
-                    ControlType::RouteUpdate => self.update_routes(client_id, &packet),
-                    ControlType::Disconnect => self.handle_disconnect(client_id),
-                    _ => Err(VpnError::Protocol("Unknown control type".into())),
-                }
-            }
+            PacketType::Control => self.handle_control_packet(client_id, packet),
         }
     }
 

@@ -7,8 +7,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use aes_gcm::Key;
-
 use crate::error::VpnError;
 
 #[derive(Debug)]
@@ -71,7 +69,7 @@ impl TcpServer {
     pub fn start_accept_loop(&mut self) -> Result<(), VpnError> {
         let clients = Arc::clone(&self.clients);
         let listener = self.listener.try_clone()?;
-        listener.set_nonblocking(true);
+        let _ = listener.set_nonblocking(true);
 
         let shutdown_flag = self.shutdown_flag.clone();
 
@@ -124,7 +122,7 @@ impl TcpServer {
         let mut clients = self.clients.lock().unwrap();
         let client_info = clients.get_mut(client_id).ok_or(VpnError::ClientNotFound)?;
 
-        client_info.stream.set_nonblocking(true);
+        let _ = client_info.stream.set_nonblocking(true);
 
         let mut buf = [0; 10];
         match client_info.stream.peek(&mut buf) {
@@ -133,7 +131,7 @@ impl TcpServer {
                     return Ok(vec![]);
                 }
             }
-            Err(e) => {
+            Err(_e) => {
                 return Ok(vec![]);
             }
         }
