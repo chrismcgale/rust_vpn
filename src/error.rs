@@ -1,5 +1,3 @@
-use thiserror::Error;
-
 #[derive(Debug)]
 pub enum VpnError {
     Io(std::io::Error),

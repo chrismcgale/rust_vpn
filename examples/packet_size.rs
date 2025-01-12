@@ -1,13 +1,13 @@
 use rust_vpn::error::Result;
+use rust_vpn::vpn;
 use rust_vpn::{
-    error::VpnError, protocol::VpnPacket, vpn_client::VpnClient, vpn_service::VpnConfig,
-    vpn_service::VpnService,
+    protocol::VpnPacket, vpn_client::VpnClient, vpn_service::VpnConfig, vpn_service::VpnService,
 };
 //use std::net::SocketAddr;
 use std::thread;
 use std::time::Duration;
 
-fn run_server(bind_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<()> {
+fn run_server(bind_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<VpnService> {
     println!("\n=== SERVER STARTING ===");
     println!("Binding to address: {}", bind_addr);
     println!(
@@ -17,13 +17,13 @@ fn run_server(bind_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> R
         config.reconnect_attempts
     );
 
-    let vpn = VpnService::new(bind_addr, encryption_key, Some(config))?;
+    let mut vpn = VpnService::new(bind_addr, encryption_key, Some(config))?;
     println!("VPN service created successfully");
 
     println!("Starting VPN service");
     vpn.start()?;
 
-    Ok(())
+    Ok(vpn)
 }
 
 fn run_client(server_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<()> {
@@ -52,7 +52,7 @@ fn run_client(server_addr: &str, encryption_key: [u8; 32], config: VpnConfig) ->
                 );
                 println!("✅ {} packet test successful!", size_desc);
             }
-            (Err(e), false) => {
+            (Err(_e), false) => {
                 println!("✅ {} packet test failed as expected!", size_desc);
             }
             (Ok(response), false) => {
@@ -125,16 +125,9 @@ fn main() -> Result<()> {
     };
 
     // Start server in a separate thread
-    println!("\nStarting server thread...");
-    let server_handle = thread::spawn({
-        let server_addr = server_addr.to_string();
-        let server_config = config.clone();
-        move || {
-            if let Err(e) = run_server(&server_addr, encryption_key, server_config) {
-                eprintln!("Server error: {:?}", e);
-            }
-        }
-    });
+    let server_addr = server_addr;
+    let server_config = config.clone();
+    let mut vpn = run_server(&server_addr.to_string(), encryption_key, server_config)?;
 
     // Give the server time to start
     println!("Waiting for server to initialize (2s)...");
@@ -149,7 +142,7 @@ fn main() -> Result<()> {
 
     // Clean up
     println!("\nTest complete, cleaning up...");
-    let _ = server_handle.join();
+    vpn.shutdown()?;
     println!("Server thread joined, exiting");
 
     Ok(())

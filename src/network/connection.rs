@@ -142,8 +142,6 @@ impl ConnectionManager {
         // Process data packet
         let response = self.process_data_packet(packet)?;
 
-        println!("connection1");
-
         // Pack and encrypt response
         let encrypted_response = self.protocol_handler.pack(response)?;
 
@@ -234,8 +232,6 @@ impl ConnectionManager {
             payload: config_data,
         };
 
-        println!("con2");
-
         // Pack and send config
         let encrypted_config = self.protocol_handler.pack(config_packet)?;
         self.server.write_packet(client_id, &encrypted_config)?;
@@ -280,8 +276,6 @@ impl ConnectionManager {
             payload: vec![1], // Simple ACK
         };
 
-        println!("connection3");
-
         // Send acknowledgment
         let encrypted_ack = self.protocol_handler.pack(ack_packet)?;
         self.server.write_packet(client_id, &encrypted_ack)?;
@@ -301,8 +295,6 @@ impl ConnectionManager {
             control_type: Some(ControlType::Disconnect),
             payload: Vec::new(),
         };
-
-        println!("connection4");
 
         let encrypted_ack = self.protocol_handler.pack(disconnect_ack)?;
         self.server.write_packet(client_id, &encrypted_ack)?;

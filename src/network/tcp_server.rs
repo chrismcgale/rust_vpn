@@ -2,12 +2,10 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
-
-use tokio::stream;
 
 use crate::error::VpnError;
 
@@ -21,6 +19,8 @@ pub struct TcpServer {
     listener: TcpListener,
     clients: Arc<Mutex<HashMap<String, ClientInfo>>>,
     bind_addr: SocketAddr,
+    listener_thread: Option<thread::JoinHandle<()>>,
+    shutdown_flag: Arc<AtomicBool>,
 }
 
 impl Clone for TcpServer {
@@ -29,6 +29,8 @@ impl Clone for TcpServer {
             listener: self.listener.try_clone().unwrap(),
             clients: Arc::clone(&self.clients),
             bind_addr: self.bind_addr,
+            listener_thread: None,
+            shutdown_flag: self.shutdown_flag.clone(),
         }
     }
 }
@@ -55,6 +57,8 @@ impl TcpServer {
             listener,
             clients: Arc::new(Mutex::new(HashMap::new())),
             bind_addr: addr,
+            listener_thread: None,
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -62,39 +66,60 @@ impl TcpServer {
         self.bind_addr
     }
 
-    pub fn start_accept_loop(&self) -> Result<(), VpnError> {
+    pub fn start_accept_loop(&mut self) -> Result<(), VpnError> {
         let clients = Arc::clone(&self.clients);
         let listener = self.listener.try_clone()?;
+        listener.set_nonblocking(true);
 
-        thread::spawn(move || loop {
-            match listener.accept() {
-                Ok((stream, addr)) => {
-                    let client_id = addr.to_string();
+        let shutdown_flag = self.shutdown_flag.clone();
 
-                    if let Err(e) = stream.set_nodelay(true) {
-                        eprintln!("Failed to set TCP_NODELAY: {}", e);
+        self.listener_thread = Some(thread::spawn(move || {
+            while !shutdown_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((stream, addr)) => {
+                        let client_id = addr.to_string();
+
+                        if let Err(e) = stream.set_nodelay(true) {
+                            eprintln!("Failed to set TCP_NODELAY: {}", e);
+                        }
+
+                        let client_info = ClientInfo {
+                            stream,
+                            last_seen: Instant::now(),
+                        };
+                        clients.lock().unwrap().insert(client_id, client_info);
                     }
-
-                    let client_info = ClientInfo {
-                        stream,
-                        last_seen: Instant::now(),
-                    };
-
-                    clients.lock().unwrap().insert(client_id, client_info);
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(100));
-                }
-                Err(e) => {
-                    eprintln!("Accept error: {}", e);
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(100));
+                    }
+                    Err(e) => {
+                        eprintln!("Accept error: {}", e);
+                    }
                 }
             }
-        });
+        }));
 
         Ok(())
     }
 
+    pub fn server_shutdown(&mut self) -> Result<(), VpnError> {
+        println!("server shut");
+        self.shutdown_flag.store(true, Ordering::Release);
+        match self.listener_thread.take().ok_or(VpnError::GenericError(
+            "Shutdown failed to find listener thread".to_string(),
+        )) {
+            Ok(handle) => {
+                handle
+                    .join()
+                    .map_err(|e| VpnError::GenericError(format!("Join error: {:?}", e)))?;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn service_read_packet(&self, client_id: &str) -> Result<Vec<u8>, VpnError> {
+        println!("Service read packet");
         let mut clients = self.clients.lock().unwrap();
         let client_info = clients.get_mut(client_id).ok_or(VpnError::ClientNotFound)?;
 

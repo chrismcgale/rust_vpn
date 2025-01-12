@@ -5,7 +5,6 @@ use crate::vpn::vpn_service::VpnConfig;
 use crate::{
     crypto::EncryptionManager, network::tcp_client::TcpClient, protocol::ProtocolHandler, VpnError,
 };
-use std::{thread, time::Duration};
 
 #[derive(Clone)]
 pub struct VpnClient {
@@ -80,8 +79,6 @@ impl VpnClient {
         if !self.connected {
             return Err(VpnError::Protocol("Not connected".into()));
         }
-
-        println!("send");
 
         // Pack and encrypt the packet
         let encrypted = self.protocol_handler.pack(packet)?;
