@@ -1,3 +1,5 @@
+use std::thread;
+
 use crate::protocol::packet::VpnPacket;
 use crate::protocol::ControlType;
 use crate::protocol::PacketType;
@@ -6,12 +8,15 @@ use crate::{
     crypto::EncryptionManager, network::tcp_client::TcpClient, protocol::ProtocolHandler, VpnError,
 };
 
-#[derive(Clone)]
+use std::sync::{atomic::AtomicBool, Arc};
+
 pub struct VpnClient {
     client: TcpClient,
     protocol_handler: ProtocolHandler,
     config: VpnConfig,
     connected: bool,
+    client_thread: Option<thread::JoinHandle<()>>,
+    shutdown_flag: Arc<AtomicBool>,
 }
 
 impl VpnClient {
@@ -31,6 +36,8 @@ impl VpnClient {
             protocol_handler,
             config,
             connected: false,
+            client_thread: None,
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
         };
 
         // Perform initial handshake
@@ -48,15 +55,10 @@ impl VpnClient {
         // Send config request
         self.client.write_packet(&encrypted_request)?;
 
-        println!("write: {:?}", encrypted_request);
-
         // Read response
         let encrypted_response = self.client.client_read_packet()?;
 
-        println!("read: {:?}", encrypted_response);
         let response = self.protocol_handler.unpack(&encrypted_response)?;
-
-        println!("response: {:?}", response);
 
         // Verify response type
         if response.packet_type != PacketType::Control
@@ -100,20 +102,23 @@ impl VpnClient {
         Ok(())
     }
 
-    fn start_keepalive(&self) -> Result<(), VpnError> {
+    fn start_keepalive(&mut self) -> Result<(), VpnError> {
         let mut client = self.client.clone();
         let protocol_handler = self.protocol_handler.clone();
         let interval = self.config.keepalive_interval;
+        let shutdown_flag = self.shutdown_flag.clone();
 
-        std::thread::spawn(move || loop {
-            let keepalive = VpnPacket::new_keepalive();
-            if let Ok(encrypted) = protocol_handler.pack(keepalive) {
-                if client.write_packet(&encrypted).is_err() {
-                    break;
+        self.client_thread = Some(std::thread::spawn(move || {
+            while !shutdown_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                let keepalive = VpnPacket::new_keepalive();
+                if let Ok(encrypted) = protocol_handler.pack(keepalive) {
+                    if client.write_packet(&encrypted).is_err() {
+                        break;
+                    }
                 }
+                std::thread::sleep(interval);
             }
-            std::thread::sleep(interval);
-        });
+        }));
 
         Ok(())
     }
@@ -124,6 +129,9 @@ impl VpnClient {
             let encrypted = self.protocol_handler.pack(disconnect_packet)?;
             self.client.write_packet(&encrypted)?;
             self.connected = false;
+            if let Some(handle) = std::mem::take(&mut self.client_thread) {
+                handle.join().unwrap();
+            };
         }
         Ok(())
     }

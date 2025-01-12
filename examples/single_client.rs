@@ -18,17 +18,14 @@ fn run_server(bind_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> R
     );
 
     let mut vpn = VpnService::new(bind_addr, encryption_key, Some(config))?;
+    println!("VPN service created successfully");
 
+    println!("Starting VPN service");
     vpn.start()?;
 
     Ok(vpn)
 }
-fn run_client(
-    server_addr: &str,
-    encryption_key: [u8; 32],
-    config: VpnConfig,
-    id: i32,
-) -> Result<()> {
+fn run_client(server_addr: &str, encryption_key: [u8; 32], config: VpnConfig) -> Result<()> {
     match std::net::TcpStream::connect(server_addr) {
         Ok(_) => println!("Client: Test connection successful"),
         Err(e) => {
@@ -52,8 +49,10 @@ fn run_client(
     let test_packet = VpnPacket::new_data(
         [192, 168, 1, 1],
         [192, 168, 1, 2],
-        b"Hello, VPN Server!".to_vec(),
+        "Hello, VPN Server!".as_bytes().to_vec(),
     );
+
+    println!("client start");
 
     let res1 = match client.send_packet(test_packet) {
         Ok(response) => {
@@ -65,10 +64,11 @@ fn run_client(
             Ok(())
         }
         Err(e) => {
-            eprintln!("Client {} : Failed to send/receive packet: {:?}", id, e);
+            eprintln!("Client: Failed to send/receive packet: {:?}", e);
             Err(e)
         }
     };
+    println!("client end");
 
     let res2 = client.disconnect();
     res1.and(res2)
@@ -96,16 +96,14 @@ async fn main() -> Result<()> {
 
     // Run client
     println!("Starting client...");
-    for i in 0..3 {
-        match run_client(server_addr, encryption_key, config.clone(), i) {
-            Ok(_) => println!("Client test {} completed successfully!", i),
-            Err(e) => eprintln!("Client error: {:?}", e),
-        }
+    match run_client(server_addr, encryption_key, config) {
+        Ok(_) => println!("Client test completed successfully!"),
+        Err(e) => eprintln!("Client error: {:?}", e),
     }
 
+    println!("Shutdown started");
     // Wait a bit before shutting down
     thread::sleep(Duration::from_secs(2));
-    println!("Shutdown");
     vpn.shutdown()?;
     println!("Server thread joined, exiting");
 

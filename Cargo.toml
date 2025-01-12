@@ -20,5 +20,9 @@ name = "packet_size"
 path = "examples/packet_size.rs"
 
 [[example]]
+name = "single_client"
+path = "examples/single_client.rs"
+
+[[example]]
 name = "multiple_clients"
 path = "examples/multiple_clients.rs"

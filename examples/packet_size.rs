@@ -1,5 +1,4 @@
 use rust_vpn::error::Result;
-use rust_vpn::vpn;
 use rust_vpn::{
     protocol::VpnPacket, vpn_client::VpnClient, vpn_service::VpnConfig, vpn_service::VpnService,
 };

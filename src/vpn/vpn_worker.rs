@@ -77,12 +77,15 @@ impl VpnWorker {
     }
 
     fn handle_client_packet(&self, client_id: &str) -> Result<(), VpnError> {
-        println!("Handling packet from client {}", client_id);
         let encrypted_packet = self
             .server
             .lock()
             .expect("Server_in_use")
             .service_read_packet(client_id)?;
+
+        if encrypted_packet.len() < 4 {
+            return Ok(());
+        }
 
         println!("Received packet from client {}", client_id);
 

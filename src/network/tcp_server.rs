@@ -7,6 +7,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use aes_gcm::Key;
+
 use crate::error::VpnError;
 
 #[derive(Debug)]
@@ -119,9 +121,22 @@ impl TcpServer {
     }
 
     pub fn service_read_packet(&self, client_id: &str) -> Result<Vec<u8>, VpnError> {
-        println!("Service read packet");
         let mut clients = self.clients.lock().unwrap();
         let client_info = clients.get_mut(client_id).ok_or(VpnError::ClientNotFound)?;
+
+        client_info.stream.set_nonblocking(true);
+
+        let mut buf = [0; 10];
+        match client_info.stream.peek(&mut buf) {
+            Ok(size) => {
+                if size < 4 {
+                    return Ok(vec![]);
+                }
+            }
+            Err(e) => {
+                return Ok(vec![]);
+            }
+        }
 
         let mut len_bytes = [0u8; 4];
         client_info.stream.read_exact(&mut len_bytes)?;
